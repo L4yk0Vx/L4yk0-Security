@@ -1,49 +1,101 @@
 name: Annonce Discord - Nouvelle version
 
 on:
+  # Automatique lorsqu'une Release GitHub est publiée
   release:
     types: [published]
+
+  # Permet de tester manuellement depuis Actions
   workflow_dispatch:
 
 jobs:
-  discord:
+  discord-update:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Envoyer l'annonce sur Discord
+      - name: Envoyer l'annonce Discord
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_UPDATE_WEBHOOK }}
+          EVENT_NAME: ${{ github.event_name }}
           VERSION: ${{ github.event.release.tag_name }}
           RELEASE_NAME: ${{ github.event.release.name }}
           RELEASE_URL: ${{ github.event.release.html_url }}
           CHANGELOG: ${{ github.event.release.body }}
+
         run: |
           python3 - <<'PY'
           import json
           import os
           import urllib.request
 
-          webhook = os.environ["DISCORD_WEBHOOK"]
+          webhook = os.environ.get("DISCORD_WEBHOOK")
 
-          version = os.environ.get("VERSION", "Nouvelle version")
-          release_name = os.environ.get("RELEASE_NAME") or f"L4yk0 Security {version}"
-          release_url = os.environ.get("RELEASE_URL", "")
-          changelog = os.environ.get("CHANGELOG", "Aucune information disponible.")
+          if not webhook:
+              raise SystemExit(
+                  "ERREUR : le secret DISCORD_UPDATE_WEBHOOK est introuvable."
+              )
 
-          # Discord limite la description d'un embed.
+          event = os.environ.get("EVENT_NAME", "")
+
+          # -----------------------------
+          # MODE TEST MANUEL
+          # -----------------------------
+          if event == "workflow_dispatch":
+              version = "v0.4.3 TEST"
+              release_name = "L4yk0 Security v0.4.3"
+              release_url = "https://github.com/L4yk0Vx/L4yk0-Security"
+              changelog = """
+          • Nouveau système de mise à jour
+          • Protection en temps réel améliorée
+          • Gestion des menaces améliorée
+          • Corrections et optimisations
+
+          Ceci est un test du système d'annonce automatique.
+          """.strip()
+
+              title = "🧪 Test du système de mise à jour"
+
+          # -----------------------------
+          # VRAIE RELEASE
+          # -----------------------------
+          else:
+              version = os.environ.get("VERSION") or "Nouvelle version"
+              release_name = (
+                  os.environ.get("RELEASE_NAME")
+                  or f"L4yk0 Security {version}"
+              )
+              release_url = (
+                  os.environ.get("RELEASE_URL")
+                  or "https://github.com/L4yk0Vx/L4yk0-Security/releases"
+              )
+              changelog = (
+                  os.environ.get("CHANGELOG")
+                  or "Corrections et améliorations générales."
+              )
+
+              title = "🛡️ Nouvelle mise à jour disponible !"
+
+          # Discord limite la taille des embeds
           if len(changelog) > 3000:
               changelog = changelog[:2997] + "..."
 
           payload = {
               "username": "L4yk0 Security",
+
               "embeds": [
                   {
-                      "title": "🛡️ Nouvelle mise à jour disponible",
+                      "title": title,
+
                       "description": (
-                          f"**{release_name}** est maintenant disponible.\n\n"
-                          f"### 📋 Nouveautés\n{changelog}"
+                          f"**{release_name}**\n\n"
+                          "Une nouvelle version de **L4yk0 Security** "
+                          "est disponible.\n\n"
+                          f"### ✨ Nouveautés\n{changelog}"
                       ),
+
+                      # Vert
                       "color": 5763719,
+
                       "fields": [
                           {
                               "name": "📦 Version",
@@ -51,16 +103,28 @@ jobs:
                               "inline": True
                           },
                           {
+                              "name": "🖥️ Plateforme",
+                              "value": "Windows",
+                              "inline": True
+                          },
+                          {
                               "name": "🔄 Mise à jour",
-                              "value": "Disponible directement depuis L4yk0 Security.",
+                              "value": (
+                                  "Les utilisateurs ayant déjà "
+                                  "**L4yk0 Security** pourront effectuer "
+                                  "la mise à jour directement depuis "
+                                  "le logiciel."
+                              ),
                               "inline": False
                           }
                       ],
+
                       "footer": {
                           "text": "L4yk0 Security • Protection Windows"
                       }
                   }
               ],
+
               "components": [
                   {
                       "type": 1,
@@ -68,7 +132,7 @@ jobs:
                           {
                               "type": 2,
                               "style": 5,
-                              "label": "Voir la mise à jour",
+                              "label": "📥 Voir la mise à jour",
                               "url": release_url
                           }
                       ]
@@ -83,11 +147,19 @@ jobs:
               data=data,
               headers={
                   "Content-Type": "application/json",
-                  "User-Agent": "L4yk0-Security-GitHub"
+                  "User-Agent": "L4yk0-Security-Updater"
               },
               method="POST"
           )
 
-          with urllib.request.urlopen(request) as response:
-              print("Annonce Discord envoyée :", response.status)
+          try:
+              with urllib.request.urlopen(request) as response:
+                  print(
+                      f"Annonce Discord envoyée avec succès "
+                      f"(HTTP {response.status})"
+                  )
+
+          except Exception as error:
+              print("Erreur pendant l'envoi Discord :", error)
+              raise
           PY
