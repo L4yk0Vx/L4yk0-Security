@@ -1,0 +1,92 @@
+name: Annonce Discord - Nouvelle version
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  discord:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Envoyer l'annonce sur Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_UPDATE_WEBHOOK }}
+          VERSION: ${{ github.event.release.tag_name }}
+          RELEASE_NAME: ${{ github.event.release.name }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+          CHANGELOG: ${{ github.event.release.body }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          webhook = os.environ["DISCORD_WEBHOOK"]
+
+          version = os.environ.get("VERSION", "Nouvelle version")
+          release_name = os.environ.get("RELEASE_NAME") or f"L4yk0 Security {version}"
+          release_url = os.environ.get("RELEASE_URL", "")
+          changelog = os.environ.get("CHANGELOG", "Aucune information disponible.")
+
+          # Discord limite la description d'un embed.
+          if len(changelog) > 3000:
+              changelog = changelog[:2997] + "..."
+
+          payload = {
+              "username": "L4yk0 Security",
+              "embeds": [
+                  {
+                      "title": "🛡️ Nouvelle mise à jour disponible",
+                      "description": (
+                          f"**{release_name}** est maintenant disponible.\n\n"
+                          f"### 📋 Nouveautés\n{changelog}"
+                      ),
+                      "color": 5763719,
+                      "fields": [
+                          {
+                              "name": "📦 Version",
+                              "value": version,
+                              "inline": True
+                          },
+                          {
+                              "name": "🔄 Mise à jour",
+                              "value": "Disponible directement depuis L4yk0 Security.",
+                              "inline": False
+                          }
+                      ],
+                      "footer": {
+                          "text": "L4yk0 Security • Protection Windows"
+                      }
+                  }
+              ],
+              "components": [
+                  {
+                      "type": 1,
+                      "components": [
+                          {
+                              "type": 2,
+                              "style": 5,
+                              "label": "Voir la mise à jour",
+                              "url": release_url
+                          }
+                      ]
+                  }
+              ]
+          }
+
+          data = json.dumps(payload).encode("utf-8")
+
+          request = urllib.request.Request(
+              webhook,
+              data=data,
+              headers={
+                  "Content-Type": "application/json",
+                  "User-Agent": "L4yk0-Security-GitHub"
+              },
+              method="POST"
+          )
+
+          with urllib.request.urlopen(request) as response:
+              print("Annonce Discord envoyée :", response.status)
+          PY
